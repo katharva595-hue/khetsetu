@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-warm-bg text-slate-800 font-sans;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f0ea;
+}
+::-webkit-scrollbar-thumb {
+  background: #c2baa8;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9d9482;
+}
+
+/* Glass & Badge Utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(220, 218, 209, 0.6);
+}

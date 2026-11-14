@@ -1,0 +1,394 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  phone           String           @unique
+  passwordHash    String
+  name            String
+  role            String           // "FARMER" | "BUYER" | "ADMIN"
+  isVerified      Boolean          @default(false)
+  status          String           @default("ACTIVE") // "ACTIVE" | "SUSPENDED"
+  avatarUrl       String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  farmerProfile   FarmerProfile?
+  buyerProfile    BuyerProfile?
+  listings        CropListing[]
+  buyerRequirements BuyerRequirement[]
+  procurementPlans ProcurementPlan[]
+  bids            Bid[]
+  farmerConversations Conversation[] @relation("FarmerConversations")
+  buyerConversations  Conversation[] @relation("BuyerConversations")
+  sentMessages    Message[]
+  orders          Order[]          @relation("BuyerOrders")
+  orderItemsAsFarmer OrderItem[]   @relation("FarmerOrderItems")
+  notifications   Notification[]
+  farmingQueries  FarmingQuery[]
+  raisedDisputes  Dispute[]        @relation("RaisedDisputes")
+  targetDisputes  Dispute[]        @relation("TargetDisputes")
+  verificationRequests VerificationRequest[]
+}
+
+model FarmerProfile {
+  id                 String         @id @default(uuid())
+  userId             String         @unique
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  village            String
+  district           String
+  state              String
+  pincode            String
+  farmAreaAcres      Float          @default(5.0)
+  experienceYears    Int            @default(5)
+  soilType           String         @default("Alluvial / Loamy")
+  primaryCrops       String         @default("Wheat, Mustard, Soybean")
+  kisanCreditCardNo  String?
+  verifiedBadge      Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  locations          FarmLocation[]
+}
+
+model BuyerProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName   String
+  businessType  String   @default("WHOLESALER") // "WHOLESALER" | "RETAILER" | "EXPORTER" | "PROCESSOR" | "INSTITUTIONAL"
+  gstin         String?
+  city          String
+  district      String
+  state         String
+  pincode       String
+  tradeLicense  String?
+  verifiedBadge Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model FarmLocation {
+  id        String        @id @default(uuid())
+  farmerId  String
+  farmer    FarmerProfile @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  label     String        @default("Main Farm")
+  latitude  Float
+  longitude Float
+  address   String
+  village   String
+  district  String
+  state     String
+  pincode   String
+
+  listings  CropListing[]
+}
+
+model CropCategory {
+  id          String        @id @default(uuid())
+  name        String        @unique
+  slug        String        @unique
+  description String?
+  icon        String?
+
+  listings    CropListing[]
+}
+
+model CropListing {
+  id               String          @id @default(uuid())
+  farmerId         String
+  farmer           User            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  categoryId       String
+  category         CropCategory    @relation(fields: [categoryId], references: [id])
+  cropName         String
+  variety          String?
+  description      String
+  quantity         Float
+  unit             String          @default("kg")
+  pricePerKg       Float
+  qualityGrade     String          @default("GRADE_A") // "GRADE_A" | "GRADE_B" | "GRADE_C"
+  harvestDate      DateTime
+  availableUntil   DateTime
+  farmLocationId   String?
+  farmLocation     FarmLocation?   @relation(fields: [farmLocationId], references: [id])
+  deliveryRadiusKm Float           @default(50.0)
+  status           String          @default("ACTIVE") // "ACTIVE" | "SOLD_OUT" | "DRAFT" | "EXPIRED"
+  viewsCount       Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  images           CropImage[]
+  bids             Bid[]
+  conversations    Conversation[]
+  orderItems       OrderItem[]
+  planItems        ProcurementPlanItem[]
+}
+
+model CropImage {
+  id        String      @id @default(uuid())
+  listingId String
+  listing   CropListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  imageUrl  String
+  isPrimary Boolean     @default(false)
+  createdAt DateTime    @default(now())
+}
+
+model BuyerRequirement {
+  id                String            @id @default(uuid())
+  buyerId           String
+  buyer             User              @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  cropName          String
+  requiredQuantity  Float
+  unit              String            @default("kg")
+  qualityGrade      String            @default("GRADE_A") // "GRADE_A" | "GRADE_B" | "GRADE_C"
+  minPrice          Float             @default(0.0)
+  maxPrice          Float
+  maxDistanceKm     Float             @default(100.0)
+  deliveryDeadline  DateTime
+  preferredLocation String
+  deliveryAddress   String
+  latitude          Float             @default(22.7196) // e.g. Indore Central Hub
+  longitude         Float             @default(75.8577)
+  notes             String?
+  status            String            @default("OPEN") // "OPEN" | "MATCHED" | "FULFILLED" | "CANCELLED"
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  procurementPlans  ProcurementPlan[]
+}
+
+model ProcurementPlan {
+  id                String                @id @default(uuid())
+  requirementId     String
+  requirement       BuyerRequirement      @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  buyerId           String
+  buyer             User                  @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  totalRequiredQty  Float
+  totalMatchedQty   Float
+  remainingShortage Float
+  totalEstimatedCost Float
+  weightedAvgPrice  Float
+  status            String                @default("DRAFT") // "DRAFT" | "CONFIRMED" | "REJECTED" | "ORDERED"
+  notes             String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  items             ProcurementPlanItem[]
+  orders            Order[]
+}
+
+model ProcurementPlanItem {
+  id                      String          @id @default(uuid())
+  planId                  String
+  plan                    ProcurementPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  listingId               String
+  listing                 CropListing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  farmerId                String
+  allocatedQty            Float
+  pricePerKg              Float
+  itemTotalCost           Float
+  distanceKm              Float
+  fulfillmentTimelineDays Int
+  reasonSelected          String
+}
+
+model Bid {
+  id             String      @id @default(uuid())
+  listingId      String
+  listing        CropListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId        String
+  buyer          User        @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  offeredPrice   Float
+  quantity       Float
+  message        String?
+  counterPrice   Float?
+  counterMessage String?
+  status         String      @default("PENDING") // "PENDING" | "ACCEPTED" | "REJECTED" | "COUNTERED" | "EXPIRED"
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model Conversation {
+  id            String      @id @default(uuid())
+  farmerId      String
+  farmer        User        @relation("FarmerConversations", fields: [farmerId], references: [id], onDelete: Cascade)
+  buyerId       String
+  buyer         User        @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
+  listingId     String?
+  listing       CropListing? @relation(fields: [listingId], references: [id])
+  lastMessageAt DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+
+  messages      Message[]
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text           String
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+model Order {
+  id              String           @id @default(uuid())
+  orderNumber     String           @unique
+  buyerId         String
+  buyer           User             @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Cascade)
+  planId          String?
+  plan            ProcurementPlan? @relation(fields: [planId], references: [id])
+  totalAmount     Float
+  status          String           @default("PENDING") // "PENDING" | "CONFIRMED" | "PROCESSING" | "READY_FOR_DISPATCH" | "IN_TRANSIT" | "DELIVERED" | "CANCELLED"
+  deliveryAddress String
+  latitude        Float?
+  longitude       Float?
+  paymentStatus   String           @default("PENDING") // "PENDING" | "ESCROW_HELD" | "RELEASED" | "REFUNDED"
+  paymentMethod   String           @default("UPI / Escrow")
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  items           OrderItem[]
+  payments        Payment[]
+  disputes        Dispute[]
+}
+
+model OrderItem {
+  id             String      @id @default(uuid())
+  orderId        String
+  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  listingId      String
+  listing        CropListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  farmerId       String
+  farmer         User        @relation("FarmerOrderItems", fields: [farmerId], references: [id], onDelete: Cascade)
+  quantity       Float
+  unitPrice      Float
+  totalPrice     Float
+  itemStatus     String      @default("CONFIRMED") // "CONFIRMED" | "PACKED" | "DISPATCHED" | "DELIVERED" | "CANCELLED"
+  trackingNumber String?
+  dispatchedAt   DateTime?
+  deliveredAt    DateTime?
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount        Float
+  transactionId String   @unique
+  method        String   // "UPI" | "NET_BANKING" | "ESCROW" | "CASH_ON_DELIVERY"
+  status        String   @default("COMPLETED") // "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED"
+  createdAt     DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("INFO") // "BID" | "ORDER" | "ADVISORY" | "WEATHER" | "SYSTEM"
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+model WeatherRecord {
+  id          String   @id @default(uuid())
+  location    String
+  district    String
+  state       String
+  temperature Float
+  condition   String
+  humidity    Int
+  rainProb    Int
+  windSpeed   Float
+  forecastJson String?
+  recordedAt  DateTime @default(now())
+}
+
+model MarketPrice {
+  id            String   @id @default(uuid())
+  commodity     String
+  state         String
+  district      String
+  marketName    String
+  minPrice      Float
+  maxPrice      Float
+  modalPrice    Float
+  priceDate     DateTime @default(now())
+  source        String   @default("Agmarknet / Demo Mandi Feed")
+  isVerifiedGov Boolean  @default(true)
+}
+
+model AgriculturalAdvisory {
+  id                 String   @id @default(uuid())
+  title              String
+  category           String   // "CROP_RECOMMENDATION" | "DISEASE_CONTROL" | "PEST_MANAGEMENT" | "SEASONAL_GUIDANCE" | "SOIL_HEALTH"
+  cropName           String
+  description        String
+  symptoms           String?
+  solution           String
+  preventiveMeasures String?
+  seasonalTiming     String?
+  severity           String   @default("MODERATE") // "LOW" | "MODERATE" | "HIGH" | "CRITICAL"
+  imageUrl           String?
+  createdAt          DateTime @default(now())
+}
+
+model FarmingQuery {
+  id             String    @id @default(uuid())
+  farmerId       String
+  farmer         User      @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  cropName       String
+  queryText      String
+  imageUrl       String?
+  status         String    @default("PENDING") // "PENDING" | "ANSWERED" | "RESOLVED"
+  aiResponse     String?
+  expertResponse String?
+  answeredAt     DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+model Dispute {
+  id              String    @id @default(uuid())
+  orderId         String
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  raisedById      String
+  raisedBy        User      @relation("RaisedDisputes", fields: [raisedById], references: [id], onDelete: Cascade)
+  againstUserId   String
+  againstUser     User      @relation("TargetDisputes", fields: [againstUserId], references: [id], onDelete: Cascade)
+  reason          String
+  description     String
+  status          String    @default("OPEN") // "OPEN" | "UNDER_INVESTIGATION" | "RESOLVED" | "DISMISSED"
+  adminResolution String?
+  resolvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+model VerificationRequest {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String    // "FARMER" | "BUYER"
+  documentType   String    // "AADHAAR" | "PAN" | "KISAN_CREDIT_CARD" | "GSTIN" | "MANDI_LICENSE"
+  documentNumber String
+  documentUrl    String?
+  status         String    @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  adminNotes     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+}

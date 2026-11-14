@@ -1,0 +1,392 @@
+// Prisma Schema for MySQL Database
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String                @id @default(uuid())
+  email                String                @unique
+  phone                String                @unique
+  passwordHash         String
+  name                 String
+  role                 String                // "FARMER" | "BUYER" | "ADMIN"
+  isVerified           Boolean               @default(false)
+  status               String                @default("ACTIVE") // "ACTIVE" | "SUSPENDED"
+  avatarUrl            String?               @db.Text
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  farmerProfile        FarmerProfile?
+  buyerProfile         BuyerProfile?
+  listings             CropListing[]
+  buyerRequirements    BuyerRequirement[]
+  procurementPlans     ProcurementPlan[]
+  bids                 Bid[]
+  farmerConversations  Conversation[]        @relation("FarmerConversations")
+  buyerConversations   Conversation[]        @relation("BuyerConversations")
+  sentMessages         Message[]
+  orders               Order[]               @relation("BuyerOrders")
+  orderItemsAsFarmer   OrderItem[]           @relation("FarmerOrderItems")
+  notifications        Notification[]
+  farmingQueries       FarmingQuery[]
+  raisedDisputes       Dispute[]             @relation("RaisedDisputes")
+  targetDisputes       Dispute[]             @relation("TargetDisputes")
+  verificationRequests VerificationRequest[]
+}
+
+model FarmerProfile {
+  id                 String         @id @default(uuid())
+  userId             String         @unique
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  village            String
+  district           String
+  state              String
+  pincode            String
+  farmAreaAcres      Float          @default(5.0)
+  experienceYears    Int            @default(5)
+  soilType           String         @default("Alluvial / Loamy")
+  primaryCrops       String         @default("Wheat, Mustard, Soybean")
+  kisanCreditCardNo  String?
+  verifiedBadge      Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  locations          FarmLocation[]
+}
+
+model BuyerProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName   String
+  businessType  String   @default("WHOLESALER")
+  gstin         String?
+  city          String
+  district      String
+  state         String
+  pincode       String
+  tradeLicense  String?
+  verifiedBadge Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model FarmLocation {
+  id        String        @id @default(uuid())
+  farmerId  String
+  farmer    FarmerProfile @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  label     String        @default("Main Farm")
+  latitude  Float
+  longitude Float
+  address   String
+  village   String
+  district  String
+  state     String
+  pincode   String
+
+  listings  CropListing[]
+}
+
+model CropCategory {
+  id          String        @id @default(uuid())
+  name        String        @unique
+  slug        String        @unique
+  description String?       @db.Text
+  icon        String?
+
+  listings    CropListing[]
+}
+
+model CropListing {
+  id               String          @id @default(uuid())
+  farmerId         String
+  farmer           User            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  categoryId       String
+  category         CropCategory    @relation(fields: [categoryId], references: [id])
+  cropName         String
+  variety          String?
+  description      String          @db.Text
+  quantity         Float
+  unit             String          @default("kg")
+  pricePerKg       Float
+  qualityGrade     String          @default("GRADE_A")
+  harvestDate      DateTime
+  availableUntil   DateTime
+  farmLocationId   String?
+  farmLocation     FarmLocation?   @relation(fields: [farmLocationId], references: [id])
+  deliveryRadiusKm Float           @default(50.0)
+  status           String          @default("ACTIVE")
+  viewsCount       Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  images           CropImage[]
+  bids             Bid[]
+  conversations    Conversation[]
+  orderItems       OrderItem[]
+  planItems        ProcurementPlanItem[]
+}
+
+model CropImage {
+  id        String      @id @default(uuid())
+  listingId String
+  listing   CropListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  imageUrl  String      @db.Text
+  isPrimary Boolean     @default(false)
+  createdAt DateTime    @default(now())
+}
+
+model BuyerRequirement {
+  id                String            @id @default(uuid())
+  buyerId           String
+  buyer             User              @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  cropName          String
+  requiredQuantity  Float
+  unit              String            @default("kg")
+  qualityGrade      String            @default("GRADE_A")
+  minPrice          Float             @default(0.0)
+  maxPrice          Float
+  maxDistanceKm     Float             @default(100.0)
+  deliveryDeadline  DateTime
+  preferredLocation String
+  deliveryAddress   String
+  latitude          Float             @default(22.7196)
+  longitude         Float             @default(75.8577)
+  notes             String?           @db.Text
+  status            String            @default("OPEN")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  procurementPlans  ProcurementPlan[]
+}
+
+model ProcurementPlan {
+  id                 String                @id @default(uuid())
+  requirementId      String
+  requirement        BuyerRequirement      @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  buyerId            String
+  buyer              User                  @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  totalRequiredQty   Float
+  totalMatchedQty    Float
+  remainingShortage  Float
+  totalEstimatedCost Float
+  weightedAvgPrice   Float
+  status             String                @default("DRAFT")
+  notes              String?               @db.Text
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  items              ProcurementPlanItem[]
+  orders             Order[]
+}
+
+model ProcurementPlanItem {
+  id                      String          @id @default(uuid())
+  planId                  String
+  plan                    ProcurementPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  listingId               String
+  listing                 CropListing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  farmerId                String
+  allocatedQty            Float
+  pricePerKg              Float
+  itemTotalCost           Float
+  distanceKm              Float
+  fulfillmentTimelineDays Int
+  reasonSelected          String          @db.Text
+}
+
+model Bid {
+  id             String      @id @default(uuid())
+  listingId      String
+  listing        CropListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId        String
+  buyer          User        @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  offeredPrice   Float
+  quantity       Float
+  message        String?     @db.Text
+  counterPrice   Float?
+  counterMessage String?     @db.Text
+  status         String      @default("PENDING")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model Conversation {
+  id            String       @id @default(uuid())
+  farmerId      String
+  farmer        User         @relation("FarmerConversations", fields: [farmerId], references: [id], onDelete: Cascade)
+  buyerId       String
+  buyer         User         @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
+  listingId     String?
+  listing       CropListing? @relation(fields: [listingId], references: [id])
+  lastMessageAt DateTime     @default(now())
+  createdAt     DateTime     @default(now())
+
+  messages      Message[]
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text           String       @db.Text
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+model Order {
+  id              String           @id @default(uuid())
+  orderNumber     String           @unique
+  buyerId         String
+  buyer           User             @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Cascade)
+  planId          String?
+  plan            ProcurementPlan? @relation(fields: [planId], references: [id])
+  totalAmount     Float
+  status          String           @default("PENDING")
+  deliveryAddress String           @db.Text
+  latitude        Float?
+  longitude       Float?
+  paymentStatus   String           @default("PENDING")
+  paymentMethod   String           @default("UPI / Escrow")
+  notes           String?          @db.Text
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  items           OrderItem[]
+  payments        Payment[]
+  disputes        Dispute[]
+}
+
+model OrderItem {
+  id             String      @id @default(uuid())
+  orderId        String
+  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  listingId      String
+  listing        CropListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  farmerId       String
+  farmer         User        @relation("FarmerOrderItems", fields: [farmerId], references: [id], onDelete: Cascade)
+  quantity       Float
+  unitPrice      Float
+  totalPrice     Float
+  itemStatus     String      @default("CONFIRMED")
+  trackingNumber String?
+  dispatchedAt   DateTime?
+  deliveredAt    DateTime?
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount        Float
+  transactionId String   @unique
+  method        String
+  status        String   @default("COMPLETED")
+  createdAt     DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String   @db.Text
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+model WeatherRecord {
+  id           String   @id @default(uuid())
+  location     String
+  district     String
+  state        String
+  temperature  Float
+  condition    String
+  humidity     Int
+  rainProb     Int
+  windSpeed    Float
+  forecastJson String?  @db.Text
+  recordedAt   DateTime @default(now())
+}
+
+model MarketPrice {
+  id            String   @id @default(uuid())
+  commodity     String
+  state         String
+  district      String
+  marketName    String
+  minPrice      Float
+  maxPrice      Float
+  modalPrice    Float
+  priceDate     DateTime @default(now())
+  source        String   @default("Agmarknet / Demo Mandi Feed")
+  isVerifiedGov Boolean  @default(true)
+}
+
+model AgriculturalAdvisory {
+  id                 String   @id @default(uuid())
+  title              String
+  category           String
+  cropName           String
+  description        String   @db.Text
+  symptoms           String?  @db.Text
+  solution           String   @db.Text
+  preventiveMeasures String?  @db.Text
+  seasonalTiming     String?
+  severity           String   @default("MODERATE")
+  imageUrl           String?  @db.Text
+  createdAt          DateTime @default(now())
+}
+
+model FarmingQuery {
+  id             String    @id @default(uuid())
+  farmerId       String
+  farmer         User      @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  cropName       String
+  queryText      String    @db.Text
+  imageUrl       String?   @db.Text
+  status         String    @default("PENDING")
+  aiResponse     String?   @db.Text
+  expertResponse String?   @db.Text
+  answeredAt     DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+model Dispute {
+  id              String    @id @default(uuid())
+  orderId         String
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  raisedById      String
+  raisedBy        User      @relation("RaisedDisputes", fields: [raisedById], references: [id], onDelete: Cascade)
+  againstUserId   String
+  againstUser     User      @relation("TargetDisputes", fields: [againstUserId], references: [id], onDelete: Cascade)
+  reason          String
+  description     String    @db.Text
+  status          String    @default("OPEN")
+  adminResolution String?   @db.Text
+  resolvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+model VerificationRequest {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String
+  documentType   String
+  documentNumber String
+  documentUrl    String?   @db.Text
+  status         String    @default("PENDING")
+  adminNotes     String?   @db.Text
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+}

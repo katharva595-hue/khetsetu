@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Production build artifacts
+dist/
+client/dist/
+server/dist/
+
+# Local databases & logs
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+server/dev.db
+server/dev.db-journal
+
+# Environment variables (keep .env.example)
+.env
+.env.local
+server/.env
+
+# Editor & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
